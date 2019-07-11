@@ -1,0 +1,3 @@
+$util.qr($ctx.stash.put("resolverName", "addFriend"))
+$util.qr($ctx.stash.put("addFriendReferenceLinkId", $ctx.args.referenceLinkId))
+{}

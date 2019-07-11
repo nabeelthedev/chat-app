@@ -1,0 +1,78 @@
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+type Subscription {
+  postedMessage(groupId: ID!): Message
+    @aws_subscribe(mutations: ["postMessage"])
+}
+
+type Query {
+  getUser: User
+  listGroups(nextToken: String): ListGroupsResponse
+  listMessages(
+    groupId: ID!
+    nextToken: String
+    after: Int
+  ): ListMessagesResponse
+}
+
+type Mutation {
+  createReferenceLink(value: ID, type: ReferenceLinkType!): ReferenceLink!
+  addFriend(referenceLinkId: ID!): Relationship!
+  createGroup(name: String): Group!
+  postMessage(groupId: ID!, message: String!): Message!
+  updateDisplayName(displayName: String!): User
+  joinGroup(referenceLinkId: ID!): Group
+}
+
+type User {
+  displayName: String
+}
+
+type ReferenceLink {
+  id: ID!
+  expirationTime: Int!
+}
+
+type Relationship {
+  theirId: ID!
+  status: RelationshipStatus!
+}
+
+enum ReferenceLinkType {
+  USER
+  GROUP
+}
+
+enum RelationshipStatus {
+  FRIENDS
+  BLOCKED
+}
+
+type Group {
+  id: ID!
+  name: String!
+  LastUpdated: Int!
+}
+
+type ListGroupsResponse {
+  items: [Group]
+  nextToken: String
+}
+
+type Message {
+  groupId: ID!
+  id: ID!
+  CreateTime: Int!
+  message: String!
+  author: String!
+  DisplayName: String!
+}
+
+type ListMessagesResponse {
+  items: [Message]
+  nextToken: String
+}

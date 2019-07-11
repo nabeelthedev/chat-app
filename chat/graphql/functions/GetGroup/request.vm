@@ -1,0 +1,11 @@
+#if($ctx.stash.resolverName == "joinGroup")
+    #set($id = $ctx.stash.joinGroupId)
+#end
+{
+  "version": "2017-02-28",
+  "operation": "GetItem",
+  "key": {
+    "id": { "S": "${id}" }
+  },
+  "consistentRead": true
+}

@@ -1,0 +1,13 @@
+#if($ctx.error)
+    $util.error($ctx.error.message, $ctx.error.type)
+#end
+
+#if($ctx.stash.resolverName == "addFriend")
+    #if($ctx.result.status == "FRIENDS")
+        $util.error("You are already friends with this user.", "Already Friends")
+        #elseif ($ctx.result.status == "BLOCKED")
+        $util.error("You are blocked by this user.", "Blocked")
+    #end
+#end
+
+$util.toJson($ctx.result)

@@ -1,0 +1,8 @@
+#if($ctx.arguments.type == "USER")
+    $util.qr($ctx.stash.put("createReferenceLinkValue", $ctx.identity.sub))
+#end
+#if($ctx.arguments.type == "GROUP")
+    $util.qr($ctx.stash.put("createReferenceLinkValue", $ctx.args.value))
+#end
+$util.qr($ctx.stash.put("resolverName", "createReferenceLink"))
+{}

@@ -1,0 +1,17 @@
+#if($ctx.stash.resolverName == "createGroup")
+    #set($groupId = $ctx.stash.createGroupId)
+#end
+#if($ctx.stash.resolverName == "joinGroup")
+    #set($groupId = $ctx.stash.joinGroupId)
+#end
+{
+  "version": "2017-02-28",
+  "operation": "PutItem",
+  "key": {
+    "id": { "S": "${ctx.identity.sub}" },
+    "groupId": { "S": "${groupId}" }
+  },
+  "condition": {
+    "expression": "attribute_not_exists(groupId)"
+  }
+}

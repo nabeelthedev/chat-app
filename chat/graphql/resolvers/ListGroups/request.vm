@@ -1,0 +1,15 @@
+{
+    "version" : "2018-05-29",
+    "operation" : "Query",
+    "query" : {
+        "expression" : "id = :id",
+        "expressionValues" : {
+            ":id" : {"S": "${ctx.identity.sub}"}
+        }
+    },
+    "limit" : 100,
+    "scanIndexForward" : true,
+    "consistentRead" : true,
+    "select" : "ALL_ATTRIBUTES",
+    #if($ctx.args.nextToken)"nextToken": "${ctx.args.nextToken}"#else#end
+}

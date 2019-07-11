@@ -1,0 +1,11 @@
+#if($ctx.error)
+    $util.error($ctx.error.message, $ctx.error.type)
+#end
+#if($ctx.stash.resolverName == "getUser")
+    $util.qr($ctx.stash.put("getUserResult", $ctx.result))
+#end
+#if($ctx.stash.resolverName == "postMessage")
+    $util.qr($ctx.stash.put("postMessageDisplayName", $ctx.result.displayName))
+#end
+
+$util.toJson($ctx.result)

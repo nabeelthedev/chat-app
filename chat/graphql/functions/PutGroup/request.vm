@@ -1,0 +1,24 @@
+#if($ctx.stash.resolverName == "createGroup")
+    #if($ctx.args.name != "")
+        #set($name = $ctx.args.name)
+    #else
+        #set($name = "GroupName")
+    #end
+    $util.qr($ctx.stash.put("createGroupName", "${name}"))
+    #set($id = "${util.autoId()}")
+    $util.qr($ctx.stash.put("createGroupId", "${id}"))
+    ## #set($timeNow = "${util.time.nowEpochSeconds()}")
+    ## $util.qr($ctx.stash.put("createGroupLastUpdated", "${timeNow}"))
+    ## #set($memberId = "${ctx.identity.sub}")
+    ## $util.qr($ctx.stash.put("createGroupMembers", "${memberId}"))
+#end
+{
+  "version": "2017-02-28",
+  "operation": "PutItem",
+  "key": {
+    "id": { "S": "${id}" }
+  },
+  "attributeValues" : {
+    "name": {"S": "${name}"}
+  }
+}

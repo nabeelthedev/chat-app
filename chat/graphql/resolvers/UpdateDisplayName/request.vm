@@ -1,0 +1,14 @@
+## $util.qr($ctx.stash.put("resolverName", "getUser"))
+{
+    "version" : "2017-02-28",
+    "operation" : "UpdateItem",
+    "key": {
+        "id" : {"S": "${ctx.identity.sub}"}
+    },
+    "update" : {
+        "expression" : "SET displayName = :d",
+       "expressionValues" : {
+           ":d" : {"S": "${ctx.args.displayName}"}
+       }
+    }
+}

@@ -1,0 +1,16 @@
+#if($ctx.stash.resolverName == "addFriend")
+    #if($ctx.stash.resolverStage != "checkTheirStatus")
+        $util.qr($ctx.stash.put("resolverStage", "checkTheirStatus"))
+        #set($id = $ctx.stash.addFriendReferenceLinkValue)
+        #set($theirId = $ctx.identity.sub)
+    #end
+#end
+{
+  "version": "2017-02-28",
+  "operation": "GetItem",
+  "key": {
+    "id": { "S": "${id}" },
+    "theirId": { "S": "${theirId}" }
+  },
+  "consistentRead": true
+}

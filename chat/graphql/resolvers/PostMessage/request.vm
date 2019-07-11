@@ -1,0 +1,2 @@
+$util.qr($ctx.stash.put("resolverName", "postMessage"))
+{}

@@ -1,0 +1,4 @@
+$util.toJson({"id": "${ctx.stash.postMessageId}", "groupId": "${ctx.stash.postMessageGroupId}",
+"message": "${ctx.stash.postMessageMessage}",
+"author": "${ctx.stash.postMessageAuthor}",
+"CreateTime": "${ctx.stash.postMessageCreateTime}", "DisplayName": "${ctx.stash.postMessageDisplayName}"})

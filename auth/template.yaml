@@ -1,0 +1,589 @@
+Parameters:
+  # UserPoolDomainName:
+  #   Type: String
+  # UserPoolDomainCertificateArn:
+  #   Type: String
+  #   Default: ''
+  UserPoolAuthDomain:
+    Type: String
+    Default: ''
+  IdPGoogleId:
+    Type: String
+  IdPGoogleSecret:
+    Type: String
+Outputs:
+  UserPool:
+    Value:
+      Ref: UserPool
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-UserPoolId"
+Resources:
+  ServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - apigateway.amazonaws.com
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      RoleName:
+        Fn::Sub: "${AWS::StackName}-${AWS::Region}-ServiceRole"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource: "*"
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - cognito-idp:DeleteUserPoolDomain
+            - cognito-idp:CreateUserPoolDomain
+            - cognito-idp:UpdateUserPoolDomain
+            - cognito-idp:UpdateIdentityProvider
+            - cognito-idp:CreateIdentityProvider
+            - cognito-idp:DeleteIdentityProvider
+            - cognito-idp:CreateUserPoolClient
+            - cognito-idp:DeleteUserPoolClient
+            - cognito-idp:UpdateUserPoolClient
+            - cognito-idp:InitiateAuth
+            Resource:
+              Fn::GetAtt:
+              - UserPool
+              - Arn
+          - Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            Resource:
+              Fn::GetAtt:
+              - SessionsDB
+              - Arn
+          - Effect: Allow
+            Action:
+            - waf-regional:GetChangeToken
+            - waf-regional:UpdateWebACL
+            Resource:
+            - Fn::Join:
+              - ''
+              - - Fn::Sub: arn:aws:waf-regional:${AWS::Region}:${AWS::AccountId}:webacl/
+                - Ref: WAFWebACL
+            - Fn::Sub: arn:aws:waf-regional:${AWS::Region}:${AWS::AccountId}:changetoken/*
+            - Fn::Sub: arn:aws:waf-regional:${AWS::Region}:${AWS::AccountId}:rule/*
+            - Fn::Sub: arn:aws:waf-regional:${AWS::Region}:${AWS::AccountId}:ratebasedrule/*
+    DependsOn:
+    - UserPool
+    - SessionsDB
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UsernameAttributes:
+      - email
+  UserPoolDomainLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code: "./functions/UserPoolDomain"
+      Handler: index.handler
+      Role:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Runtime: nodejs10.x
+    DependsOn:
+    - UserPool
+    - ServiceRole
+  # UserPoolDomain:
+  #   Type: Custom::UserPoolDomain
+  #   Properties:
+  #     ServiceToken:
+  #       Fn::GetAtt:
+  #       - UserPoolDomainLambda
+  #       - Arn
+  #     UserPoolId:
+  #       Ref: UserPool
+  #     Domain:
+  #       Ref: UserPoolDomainName
+  #     CustomDomainConfig:
+  #       CertificateArn:
+  #         Ref: UserPoolDomainCertificateArn
+  #   DependsOn: UserPoolDomainLambda
+  UserPoolIdPLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code: "./functions/UserPoolIdP"
+      Handler: index.handler
+      Role:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Runtime: nodejs8.10
+    DependsOn:
+    - UserPool
+    - ServiceRole
+  UserPoolIdPGoogle:
+    Type: Custom::UserPoolIdP
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - UserPoolIdPLambda
+        - Arn
+      UserPoolId:
+        Ref: UserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_secret:
+          Ref: IdPGoogleSecret
+        authorize_scopes: profile email openid
+        client_id:
+          Ref: IdPGoogleId
+      AttributeMapping:
+        email: email
+    DependsOn: UserPoolIdPLambda
+  UserPoolClientLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code: "./functions/UserPoolClient"
+      Handler: index.handler
+      Role:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Runtime: nodejs8.10
+    DependsOn:
+    - UserPool
+    - ServiceRole
+  UserPoolClientWeb:
+    Type: Custom::UserPoolClientWeb
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - UserPoolClientLambda
+        - Arn
+      UserPoolId:
+        Ref: UserPool
+      ClientName: web
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+      - code
+      AllowedOAuthScopes:
+      - phone
+      - email
+      - openid
+      - aws.cognito.signin.user.admin
+      - profile
+      CallbackURLs:
+      - https://dev.dnqr.xyz/signin
+      LogoutURLs:
+      - https://dev.dnqr.xyz/signin
+      SupportedIdentityProviders:
+      - Google
+      GenerateSecret: true
+    DependsOn:
+    - UserPoolClientLambda
+    - UserPoolIdPGoogle
+  SessionsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code: "./functions/Sessions"
+      Handler: index.handler
+      Role:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Runtime: nodejs8.10
+      Environment:
+        Variables:
+          TableName:
+            Ref: SessionsDB
+          AuthDomain:
+            Ref: UserPoolAuthDomain
+            # Fn::GetAtt:
+            # - UserPoolDomain
+            # - Domain
+          ClientSecrets:
+            Fn::Join:
+            - ","
+            - - Fn::GetAtt:
+                - UserPoolClientWeb
+                - ClientSecret
+    DependsOn:
+    - SessionsDB
+    # - UserPoolDomain
+    - ServiceRole
+    - UserPoolClientWeb
+  AuthorizerSessionLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code: "./functions/AuthorizerSession"
+      Handler: index.handler
+      Role:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Runtime: nodejs8.10
+      Environment:
+        Variables:
+          ClientSecrets:
+            Fn::Join:
+            - ","
+            - - Fn::GetAtt:
+                - UserPoolClientWeb
+                - ClientSecret
+          TableName:
+            Ref: SessionsDB
+    DependsOn:
+    - SessionsDB
+    - ServiceRole
+    - UserPoolClientWeb
+  SessionsDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name:
+        Ref: AWS::StackName
+  ApiGatewayAuthorizerSession:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      AuthorizerUri:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:apigateway:'
+          - Ref: AWS::Region
+          - ":lambda:path/2015-03-31/functions/"
+          - Fn::GetAtt:
+            - AuthorizerSessionLambda
+            - Arn
+          - "/invocations"
+      RestApiId:
+        Ref: ApiGatewayRestApi
+      Type: REQUEST
+      Name: AuthorizerSession
+      AuthorizerResultTtlInSeconds: 0
+    DependsOn:
+    - ApiGatewayRestApi
+    - AuthorizerSessionLambda
+  RestApiResourceSession:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId:
+        Fn::GetAtt:
+        - ApiGatewayRestApi
+        - RootResourceId
+      PathPart: session
+      RestApiId:
+        Ref: ApiGatewayRestApi
+    DependsOn: ApiGatewayRestApi
+  RestApiSessionMethodPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: POST
+      ResourceId:
+        Ref: RestApiResourceSession
+      RestApiId:
+        Ref: ApiGatewayRestApi
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        Uri:
+          Fn::Join:
+          - ''
+          - - 'arn:aws:apigateway:'
+            - Ref: AWS::Region
+            - ":lambda:path/2015-03-31/functions/"
+            - Fn::GetAtt:
+              - SessionsLambda
+              - Arn
+            - "/invocations"
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'https://dev.dnqr.xyz'"
+        Credentials:
+          Fn::GetAtt:
+          - ServiceRole
+          - Arn
+      MethodResponses:
+      - StatusCode: '200'
+        ResponseModels:
+          application/json: Empty
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+    DependsOn:
+    - RestApiResourceSession
+    - ApiGatewayRestApi
+    - SessionsLambda
+  RestApiSessionMethodOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: OPTIONS
+      ResourceId:
+        Ref: RestApiResourceSession
+      RestApiId:
+        Ref: ApiGatewayRestApi
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: 
+          application/json: '{ statusCode: 200}'
+        IntegrationResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'https://dev.dnqr.xyz'"
+            method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
+            method.response.header.Access-Control-Allow-Headers: "'SessionId'"
+        Credentials:
+          Fn::GetAtt:
+          - ServiceRole
+          - Arn
+      MethodResponses:
+      - StatusCode: '200'
+        ResponseModels:
+          application/json: Empty
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Headers: true
+    DependsOn:
+    - RestApiResourceSession
+    - ApiGatewayRestApi
+    - SessionsLambda
+  RestApiResourceChat:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId:
+        Fn::GetAtt:
+        - ApiGatewayRestApi
+        - RootResourceId
+      PathPart: chat
+      RestApiId:
+        Ref: ApiGatewayRestApi
+    DependsOn: ApiGatewayRestApi
+  RestApiChatMethodPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: POST
+      ResourceId:
+        Ref: RestApiResourceChat
+      RestApiId:
+        Ref: ApiGatewayRestApi
+      AuthorizationType: CUSTOM
+      AuthorizerId:
+        Ref: ApiGatewayAuthorizerSession
+      Integration:
+        Type: HTTP
+        Uri: https://icb5jtqutjgbzier7z3lrrfbse.appsync-api.us-east-1.amazonaws.com/graphql
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_TEMPLATES
+        RequestParameters:
+          integration.request.header.Authorization: context.authorizer.Authorization
+        IntegrationResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'https://dev.dnqr.xyz'"
+      MethodResponses:
+      - StatusCode: '200'
+        ResponseModels:
+          application/json: Empty
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+    DependsOn:
+    - RestApiResourceChat
+    - ApiGatewayRestApi
+    - ApiGatewayAuthorizerSession
+  RestApiChatMethodOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: OPTIONS
+      ResourceId:
+        Ref: RestApiResourceChat
+      RestApiId:
+        Ref: ApiGatewayRestApi
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates: 
+          application/json: '{ statusCode: 200}'
+        IntegrationResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: "'https://dev.dnqr.xyz'"
+            method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
+            method.response.header.Access-Control-Allow-Headers: "'SessionId,Content-Type'"
+        Credentials:
+          Fn::GetAtt:
+          - ServiceRole
+          - Arn
+      MethodResponses:
+      - StatusCode: '200'
+        ResponseModels:
+          application/json: Empty
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Headers: true
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId:
+        Ref: ApiGatewayRestApi
+      StageName: prod
+    DependsOn: ApiGatewayRestApi
+  WAFWebACL:
+    Type: AWS::WAFRegional::WebACL
+    Properties:
+      DefaultAction:
+        Type: BLOCK
+      MetricName: WebACLMetrics
+      Name:
+        Ref: AWS::StackName
+  WAFWebACLRestApiAssociation:
+    Type: AWS::WAFRegional::WebACLAssociation
+    Properties:
+      ResourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:apigateway:'
+          - Ref: AWS::Region
+          - "::/restapis/"
+          - Ref: ApiGatewayRestApi
+          - "/stages/prod"
+      WebACLId:
+        Ref: WAFWebACL
+    DependsOn: WAFWebACL
+  WAFWebACLUpdateRuleLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code: "./functions/WAFWebACLUpdateRule"
+      Handler: index.handler
+      Role:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Runtime: nodejs8.10
+    DependsOn:
+    - WAFWebACL
+    - ServiceRole
+  WAFACLUpdate:
+    Type: Custom::WAFACLUpdate
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - WAFWebACLUpdateRuleLambda
+        - Arn
+      Updates:
+      - ActivatedRule:
+          Priority: 0
+          RuleId:
+            Ref: WAFRateRuleSession
+          Action:
+            Type: BLOCK
+          Type: RATE_BASED
+      - ActivatedRule:
+          Priority: 1
+          RuleId:
+            Ref: WAFRuleSession
+          Action:
+            Type: ALLOW
+          Type: REGULAR
+      - ActivatedRule:
+          Priority: 2
+          RuleId:
+            Ref: WAFRuleChat
+          Action:
+            Type: ALLOW
+          Type: REGULAR
+      WebACLId:
+        Ref: WAFWebACL
+    DependsOn:
+    - WAFWebACLUpdateRuleLambda
+    - WAFRateRuleSession
+    - WAFWebACL
+    - WAFRuleSession
+    - WAFRuleChat
+  WAFRateRuleSession:
+    Type: AWS::WAFRegional::RateBasedRule
+    Properties:
+      MetricName: WAFRateRuleSessionMetrics
+      Name: WAFRateRuleSession
+      RateKey: IP
+      RateLimit: 2000
+      MatchPredicates:
+      - DataId:
+          Ref: WAFRuleSessionByteMatchSet
+        Negated: false
+        Type: ByteMatch
+    DependsOn:
+    - WAFRuleSessionByteMatchSet
+  WAFRuleSession:
+    Type: AWS::WAFRegional::Rule
+    Properties:
+      MetricName: WAFRuleSessionMetrics
+      Name: WAFRuleSession
+      Predicates:
+      - DataId:
+          Ref: WAFRuleSessionByteMatchSet
+        Negated: false
+        Type: ByteMatch
+    DependsOn:
+    - WAFRuleSessionByteMatchSet
+  WAFRuleSessionByteMatchSet:
+    Type: AWS::WAFRegional::ByteMatchSet
+    Properties:
+      ByteMatchTuples:
+      - FieldToMatch:
+          Type: URI
+        PositionalConstraint: EXACTLY
+        TargetString: "/session"
+        TextTransformation: NONE
+      Name: WAFRuleSessionByteMatchSet
+  WAFRuleChat:
+    Type: AWS::WAFRegional::Rule
+    Properties:
+      MetricName: WAFRuleChatMetrics
+      Name: WAFRuleChat
+      Predicates:
+      - DataId:
+          Ref: WAFRuleChatByteMatchSet
+        Negated: false
+        Type: ByteMatch
+    DependsOn:
+    - WAFRuleChatByteMatchSet
+  WAFRuleChatByteMatchSet:
+    Type: AWS::WAFRegional::ByteMatchSet
+    Properties:
+      ByteMatchTuples:
+      - FieldToMatch:
+          Type: URI
+        PositionalConstraint: EXACTLY
+        TargetString: "/chat"
+        TextTransformation: NONE
+      Name: WAFRuleChatByteMatchSet

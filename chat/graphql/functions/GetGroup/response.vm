@@ -1,0 +1,14 @@
+#if($ctx.error)
+    $util.error($ctx.error.message, $ctx.error.type)
+#end
+
+#if($ctx.stash.resolverName == "joinGroup")
+    #if(!$ctx.result)
+        $util.error("Group does not exist.", "Group not found.")
+    #else
+        $util.qr($ctx.stash.put("joinGroupResult", $ctx.result))
+    #end
+
+#end
+
+$util.toJson($ctx.result)

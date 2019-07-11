@@ -1,0 +1,3 @@
+$util.qr($ctx.stash.put("resolverName", "joinGroup"))
+$util.qr($ctx.stash.put("joinGroupReferenceLinkId", $ctx.args.referenceLinkId))
+{}

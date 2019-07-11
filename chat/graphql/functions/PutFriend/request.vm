@@ -1,0 +1,26 @@
+#if($ctx.stash.resolverName == "addFriend")
+    #if($ctx.stash.resolverStage != "setYourRelationship")
+        $util.qr($ctx.stash.put("resolverStage", "setYourRelationship"))
+        #set($id = $ctx.identity.sub)
+        #set($theirId = $ctx.stash.addFriendReferenceLinkValue)
+        #set($status = "FRIENDS")
+        $util.qr($ctx.stash.put("resolverResult", {"id": "${id}", "theirId": "${theirId}", "status":
+        "${status}"}))
+        #elseif($ctx.stash.resolverStage != "setTheirRelationship")
+        $util.qr($ctx.stash.put("resolverStage", "setTheirRelationship"))
+        #set($id = $ctx.stash.addFriendReferenceLinkValue)
+        #set($theirId = $ctx.identity.sub)
+        #set($status = "FRIENDS")
+    #end
+#end
+{
+  "version": "2017-02-28",
+  "operation": "PutItem",
+  "key": {
+    "id": { "S": "${id}" },
+    "theirId": { "S": "${theirId}" }
+  },
+  "attributeValues" : {
+    "status": {"S": "${status}"}
+  }
+}

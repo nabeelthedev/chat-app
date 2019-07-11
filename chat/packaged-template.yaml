@@ -1,0 +1,805 @@
+Parameters: {}
+Resources:
+  ServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - appsync.amazonaws.com
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      RoleName:
+        Fn::Sub: ${AWS::StackName}-${AWS::Region}-ServiceRole
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+            - dynamodb:BatchGetItem
+            Resource:
+            - Fn::GetAtt:
+              - UsersDB
+              - Arn
+            - Fn::GetAtt:
+              - ReferenceLinksDB
+              - Arn
+            - Fn::GetAtt:
+              - RelationshipsDB
+              - Arn
+            - Fn::GetAtt:
+              - GroupsDB
+              - Arn
+            - Fn::GetAtt:
+              - GroupLinksDB
+              - Arn
+            - Fn::GetAtt:
+              - MessagesDB
+              - Arn
+            - Fn::Join:
+              - ''
+              - - Fn::GetAtt:
+                  - MessagesDB
+                  - Arn
+                - /*/*
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            Resource: '*'
+    DependsOn:
+    - UsersDB
+    - ReferenceLinksDB
+    - GroupsDB
+    - GroupLinksDB
+  GraphQLApi:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      AuthenticationType: AMAZON_COGNITO_USER_POOLS
+      Name:
+        Ref: AWS::StackName
+      UserPoolConfig:
+        UserPoolId:
+          Fn::ImportValue:
+            Fn::Sub: auth-test3-UserPoolId
+        AwsRegion:
+          Ref: AWS::Region
+        DefaultAction: ALLOW
+  GraphQLSchema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DefinitionS3Location: s3://auth-test/bc859e4a159646877dc92d776505797b
+    DependsOn: GraphQLApi
+  UsersDBDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DynamoDBConfig:
+        AwsRegion:
+          Ref: AWS::Region
+        TableName:
+          Ref: UsersDB
+      Name: UsersDB
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Type: AMAZON_DYNAMODB
+    DependsOn:
+    - GraphQLApi
+    - ServiceRole
+    - UsersDB
+  ReferenceLinksDBDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DynamoDBConfig:
+        AwsRegion:
+          Ref: AWS::Region
+        TableName:
+          Ref: ReferenceLinksDB
+      Name: ReferenceLinksDB
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Type: AMAZON_DYNAMODB
+    DependsOn:
+    - GraphQLApi
+    - ServiceRole
+    - ReferenceLinksDB
+  RelationshipsDBDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DynamoDBConfig:
+        AwsRegion:
+          Ref: AWS::Region
+        TableName:
+          Ref: RelationshipsDB
+      Name: RelationshipsDB
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Type: AMAZON_DYNAMODB
+    DependsOn:
+    - GraphQLApi
+    - ServiceRole
+    - RelationshipsDB
+  GroupsDBDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DynamoDBConfig:
+        AwsRegion:
+          Ref: AWS::Region
+        TableName:
+          Ref: GroupsDB
+      Name: GroupsDB
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Type: AMAZON_DYNAMODB
+    DependsOn:
+    - GraphQLApi
+    - ServiceRole
+    - GroupsDB
+  GroupLinksDBDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DynamoDBConfig:
+        AwsRegion:
+          Ref: AWS::Region
+        TableName:
+          Ref: GroupLinksDB
+      Name: GroupLinksDB
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Type: AMAZON_DYNAMODB
+    DependsOn:
+    - GraphQLApi
+    - ServiceRole
+    - GroupLinksDB
+  MessagesDBDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DynamoDBConfig:
+        AwsRegion:
+          Ref: AWS::Region
+        TableName:
+          Ref: MessagesDB
+      Name: MessagesDB
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Type: AMAZON_DYNAMODB
+    DependsOn:
+    - GraphQLApi
+    - ServiceRole
+    - MessagesDB
+  CreateReferenceLinkLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: auth-test
+        S3Key: b88df120384eff4c8ff642f217ff5a49
+      Handler: index.handler
+      Role:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Runtime: nodejs10.x
+      Environment:
+        Variables:
+          ReferenceLinksTableName:
+            Ref: ReferenceLinksDB
+    DependsOn:
+    - ServiceRole
+    - ReferenceLinksDB
+  CreateReferenceLinkLambdaDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      LambdaConfig:
+        LambdaFunctionArn:
+          Fn::GetAtt:
+          - CreateReferenceLinkLambda
+          - Arn
+      Name: CreateReferenceLinkLambda
+      ServiceRoleArn:
+        Fn::GetAtt:
+        - ServiceRole
+        - Arn
+      Type: AWS_LAMBDA
+    DependsOn:
+    - GraphQLApi
+    - ServiceRole
+    - CreateReferenceLinkLambda
+  AppsyncFunctionGetUser:
+    Type: AWS::AppSync::FunctionConfiguration
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DataSourceName:
+        Fn::GetAtt:
+        - UsersDBDataSource
+        - Name
+      FunctionVersion: '2018-05-29'
+      Name: GetUser
+      RequestMappingTemplateS3Location: s3://auth-test/273442fe7430466ac702cf1cdf984115
+      ResponseMappingTemplateS3Location: s3://auth-test/dd8b2906e44c0231ec9c84a5e9df66cc
+    DependsOn:
+    - GraphQLApi
+    - UsersDBDataSource
+  AppsyncFunctionPutUser:
+    Type: AWS::AppSync::FunctionConfiguration
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DataSourceName:
+        Fn::GetAtt:
+        - UsersDBDataSource
+        - Name
+      FunctionVersion: '2018-05-29'
+      Name: PutUser
+      RequestMappingTemplateS3Location: s3://auth-test/64255d4c21c235fd2b49380328a56cad
+      ResponseMappingTemplateS3Location: s3://auth-test/549396ea4c75c9658579a68efd046032
+    DependsOn:
+    - GraphQLApi
+    - UsersDBDataSource
+  AppsyncFunctionCreateReferenceLink:
+    Type: AWS::AppSync::FunctionConfiguration
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DataSourceName:
+        Fn::GetAtt:
+        - CreateReferenceLinkLambdaDataSource
+        - Name
+      FunctionVersion: '2018-05-29'
+      Name: CreateReferenceLink
+      RequestMappingTemplateS3Location: s3://auth-test/a0c14a7d70bcaeb1f79762baab4dbf67
+      ResponseMappingTemplateS3Location: s3://auth-test/549396ea4c75c9658579a68efd046032
+    DependsOn:
+    - GraphQLApi
+    - CreateReferenceLinkLambdaDataSource
+  AppsyncFunctionGetReferenceLink:
+    Type: AWS::AppSync::FunctionConfiguration
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DataSourceName:
+        Fn::GetAtt:
+        - ReferenceLinksDBDataSource
+        - Name
+      FunctionVersion: '2018-05-29'
+      Name: GetReferenceLink
+      RequestMappingTemplateS3Location: s3://auth-test/25db2b3247263aea4d8960f77fb5d03e
+      ResponseMappingTemplateS3Location: s3://auth-test/bcd6a0b44d2eb393ed81fff5c5f4de56
+    DependsOn:
+    - GraphQLApi
+    - ReferenceLinksDBDataSource
+  AppsyncFunctionPutFriend:
+    Type: AWS::AppSync::FunctionConfiguration
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DataSourceName:
+        Fn::GetAtt:
+        - RelationshipsDBDataSource
+        - Name
+      FunctionVersion: '2018-05-29'
+      Name: PutFriend
+      RequestMappingTemplateS3Location: s3://auth-test/0e534941233c3705e8275adf80966cf1
+      ResponseMappingTemplateS3Location: s3://auth-test/ee223d193bcd469316fe8e2adbc9310c
+    DependsOn:
+    - GraphQLApi
+    - RelationshipsDBDataSource
+  AppsyncFunctionGetRelationship:
+    Type: AWS::AppSync::FunctionConfiguration
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DataSourceName:
+        Fn::GetAtt:
+        - RelationshipsDBDataSource
+        - Name
+      FunctionVersion: '2018-05-29'
+      Name: GetRelationship
+      RequestMappingTemplateS3Location: s3://auth-test/ea46bcf236b4234f178b416c3cf49553
+      ResponseMappingTemplateS3Location: s3://auth-test/a8610ad5f93b3c5948eadc266b6b5cf5
+    DependsOn:
+    - GraphQLApi
+    - RelationshipsDBDataSource
+  AppsyncFunctionPutGroup:
+    Type: AWS::AppSync::FunctionConfiguration
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DataSourceName:
+        Fn::GetAtt:
+        - GroupsDBDataSource
+        - Name
+      FunctionVersion: '2018-05-29'
+      Name: PutGroup
+      RequestMappingTemplateS3Location: s3://auth-test/3a40f25349a2b374696b0b5d6be7025a
+      ResponseMappingTemplateS3Location: s3://auth-test/ee223d193bcd469316fe8e2adbc9310c
+    DependsOn:
+    - GraphQLApi
+    - GroupsDBDataSource
+  AppsyncFunctionPutGroupLink:
+    Type: AWS::AppSync::FunctionConfiguration
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DataSourceName:
+        Fn::GetAtt:
+        - GroupLinksDBDataSource
+        - Name
+      FunctionVersion: '2018-05-29'
+      Name: PutGroupLink
+      RequestMappingTemplateS3Location: s3://auth-test/e1349a99a8ebec1609d08b59e34d1dae
+      ResponseMappingTemplateS3Location: s3://auth-test/ee223d193bcd469316fe8e2adbc9310c
+    DependsOn:
+    - GraphQLApi
+    - GroupLinksDBDataSource
+  AppsyncFunctionGetGroupLink:
+    Type: AWS::AppSync::FunctionConfiguration
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DataSourceName:
+        Fn::GetAtt:
+        - GroupLinksDBDataSource
+        - Name
+      FunctionVersion: '2018-05-29'
+      Name: GetGroupLink
+      RequestMappingTemplateS3Location: s3://auth-test/854a96cc678fa59ed9326e0ca59622ca
+      ResponseMappingTemplateS3Location: s3://auth-test/d8016933218be4e2822bf839855086b4
+    DependsOn:
+    - GraphQLApi
+    - GroupLinksDBDataSource
+  AppsyncFunctionPutMessage:
+    Type: AWS::AppSync::FunctionConfiguration
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DataSourceName:
+        Fn::GetAtt:
+        - MessagesDBDataSource
+        - Name
+      FunctionVersion: '2018-05-29'
+      Name: PutMessage
+      RequestMappingTemplateS3Location: s3://auth-test/b5fc99902eb8736b5d17b51244539197
+      ResponseMappingTemplateS3Location: s3://auth-test/ee223d193bcd469316fe8e2adbc9310c
+    DependsOn:
+    - GraphQLApi
+    - MessagesDBDataSource
+  AppsyncFunctionGetGroup:
+    Type: AWS::AppSync::FunctionConfiguration
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      DataSourceName:
+        Fn::GetAtt:
+        - GroupsDBDataSource
+        - Name
+      FunctionVersion: '2018-05-29'
+      Name: GetGroup
+      RequestMappingTemplateS3Location: s3://auth-test/f23a62912cc40020ac9a488cf4b3371d
+      ResponseMappingTemplateS3Location: s3://auth-test/aa908c814d8f0f7851b1dccbd76c731e
+    DependsOn:
+    - GraphQLApi
+    - GroupsDBDataSource
+  AppsyncResolverGetUser:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      FieldName: getUser
+      Kind: PIPELINE
+      PipelineConfig:
+        Functions:
+        - Fn::GetAtt:
+          - AppsyncFunctionGetUser
+          - FunctionId
+        - Fn::GetAtt:
+          - AppsyncFunctionPutUser
+          - FunctionId
+      RequestMappingTemplateS3Location: s3://auth-test/687a03e9f7f783c68b378729cc986e0a
+      ResponseMappingTemplateS3Location: s3://auth-test/8b40e2e97c2e0bfdd96e924d155c23c2
+      TypeName: Query
+    DependsOn:
+    - GraphQLApi
+    - GraphQLSchema
+    - AppsyncFunctionGetUser
+    - AppsyncFunctionPutUser
+  AppsyncResolverCreateReferenceLink:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      FieldName: createReferenceLink
+      Kind: PIPELINE
+      PipelineConfig:
+        Functions:
+        - Fn::GetAtt:
+          - AppsyncFunctionCreateReferenceLink
+          - FunctionId
+      RequestMappingTemplateS3Location: s3://auth-test/7292f169ac2b3660e211087056cfb054
+      ResponseMappingTemplateS3Location: s3://auth-test/8b40e2e97c2e0bfdd96e924d155c23c2
+      TypeName: Mutation
+    DependsOn:
+    - GraphQLApi
+    - GraphQLSchema
+    - AppsyncFunctionCreateReferenceLink
+  AppsyncResolverAddFriend:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      FieldName: addFriend
+      Kind: PIPELINE
+      PipelineConfig:
+        Functions:
+        - Fn::GetAtt:
+          - AppsyncFunctionGetReferenceLink
+          - FunctionId
+        - Fn::GetAtt:
+          - AppsyncFunctionGetRelationship
+          - FunctionId
+        - Fn::GetAtt:
+          - AppsyncFunctionPutFriend
+          - FunctionId
+        - Fn::GetAtt:
+          - AppsyncFunctionPutFriend
+          - FunctionId
+      RequestMappingTemplateS3Location: s3://auth-test/e9800cb7c047f8ba92689d102e799bae
+      ResponseMappingTemplateS3Location: s3://auth-test/e534a6b42b27c82823678b2ce8006fdd
+      TypeName: Mutation
+    DependsOn:
+    - GraphQLApi
+    - GraphQLSchema
+    - AppsyncFunctionGetReferenceLink
+    - AppsyncFunctionPutFriend
+    - AppsyncFunctionGetRelationship
+  AppsyncResolverCreateGroup:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      FieldName: createGroup
+      TypeName: Mutation
+      Kind: PIPELINE
+      RequestMappingTemplateS3Location: s3://auth-test/74917aa50da888b61fbfafc6f43f5a7f
+      ResponseMappingTemplateS3Location: s3://auth-test/5ff76e2b739d1d3c9b73811943cbc917
+      PipelineConfig:
+        Functions:
+        - Fn::GetAtt:
+          - AppsyncFunctionPutGroup
+          - FunctionId
+        - Fn::GetAtt:
+          - AppsyncFunctionPutGroupLink
+          - FunctionId
+    DependsOn:
+    - GraphQLApi
+    - GraphQLSchema
+    - AppsyncFunctionPutGroup
+    - AppsyncFunctionPutGroupLink
+  AppsyncResolverListGroups:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      FieldName: listGroups
+      TypeName: Query
+      Kind: UNIT
+      RequestMappingTemplateS3Location: s3://auth-test/14aded3a4b9b27167015500b62d7c6ba
+      ResponseMappingTemplateS3Location: s3://auth-test/ee223d193bcd469316fe8e2adbc9310c
+      DataSourceName:
+        Fn::GetAtt:
+        - GroupLinksDBDataSource
+        - Name
+    DependsOn:
+    - GraphQLApi
+    - GraphQLSchema
+    - GroupLinksDBDataSource
+  AppsyncResolverListGroupsGetGroup:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      FieldName: items
+      TypeName: ListGroupsResponse
+      Kind: UNIT
+      RequestMappingTemplate:
+        Fn::Join:
+        - ''
+        - - Fn::Sub:
+            - '#if($ctx.source.items == []) #return($ctx.source.items) #end { "version"
+              : "2018-05-29", "operation" : "BatchGetItem", "tables" : { "${TableName}":
+              {'
+            - TableName:
+                Ref: GroupsDB
+          - '"keys": [ #foreach($i in $ctx.source.items) { "id": {"S": "${i.groupId}"}
+            }, #end ], "consistentRead": true } } }'
+      ResponseMappingTemplate:
+        Fn::Sub:
+        - '#if($ctx.error) $util.error($ctx.error.message, $ctx.error.type) #end $util.toJson($ctx.result.data.${TableName})'
+        - TableName:
+            Ref: GroupsDB
+      DataSourceName:
+        Fn::GetAtt:
+        - GroupsDBDataSource
+        - Name
+    DependsOn:
+    - GraphQLApi
+    - GraphQLSchema
+    - GroupsDBDataSource
+  AppsyncResolverListMessages:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      FieldName: listMessages
+      TypeName: Query
+      Kind: UNIT
+      RequestMappingTemplateS3Location: s3://auth-test/fa0d13837288221210b32c78b507c7af
+      ResponseMappingTemplateS3Location: s3://auth-test/ee223d193bcd469316fe8e2adbc9310c
+      DataSourceName:
+        Fn::GetAtt:
+        - MessagesDBDataSource
+        - Name
+    DependsOn:
+    - GraphQLApi
+    - GraphQLSchema
+    - MessagesDBDataSource
+  AppsyncResolverPostMessage:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      FieldName: postMessage
+      TypeName: Mutation
+      Kind: PIPELINE
+      PipelineConfig:
+        Functions:
+        - Fn::GetAtt:
+          - AppsyncFunctionGetGroupLink
+          - FunctionId
+        - Fn::GetAtt:
+          - AppsyncFunctionGetUser
+          - FunctionId
+        - Fn::GetAtt:
+          - AppsyncFunctionPutMessage
+          - FunctionId
+      RequestMappingTemplateS3Location: s3://auth-test/fac626946fa07251aab37490f85eacad
+      ResponseMappingTemplateS3Location: s3://auth-test/b0c1123f286d0e7733b75bcebbee12ed
+    DependsOn:
+    - GraphQLApi
+    - GraphQLSchema
+    - MessagesDBDataSource
+    - AppsyncFunctionPutMessage
+    - AppsyncFunctionGetGroupLink
+    - AppsyncFunctionGetUser
+  AppsyncResolverUpdateDisplayName:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      FieldName: updateDisplayName
+      TypeName: Mutation
+      Kind: UNIT
+      RequestMappingTemplateS3Location: s3://auth-test/62b1f6ed0e9ebcce35032ad5a16b7546
+      ResponseMappingTemplateS3Location: s3://auth-test/8b40e2e97c2e0bfdd96e924d155c23c2
+      DataSourceName:
+        Fn::GetAtt:
+        - UsersDBDataSource
+        - Name
+    DependsOn:
+    - GraphQLApi
+    - GraphQLSchema
+    - UsersDBDataSource
+  AppsyncResolverJoinGroup:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId:
+        Fn::GetAtt:
+        - GraphQLApi
+        - ApiId
+      FieldName: joinGroup
+      TypeName: Mutation
+      Kind: PIPELINE
+      RequestMappingTemplateS3Location: s3://auth-test/d49c883cfcd7c02fa819117996ec31c8
+      ResponseMappingTemplateS3Location: s3://auth-test/4da5e7275115ea9402ba20ae90d21b75
+      PipelineConfig:
+        Functions:
+        - Fn::GetAtt:
+          - AppsyncFunctionGetReferenceLink
+          - FunctionId
+        - Fn::GetAtt:
+          - AppsyncFunctionGetGroup
+          - FunctionId
+        - Fn::GetAtt:
+          - AppsyncFunctionPutGroupLink
+          - FunctionId
+    DependsOn:
+    - GraphQLApi
+    - GraphQLSchema
+    - AppsyncFunctionGetReferenceLink
+    - AppsyncFunctionPutGroupLink
+    - AppsyncFunctionGetGroup
+  UsersDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+  ReferenceLinksDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      TimeToLiveSpecification:
+        AttributeName: ExpirationTime
+        Enabled: true
+  RelationshipsDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      - AttributeName: theirId
+        KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      - AttributeName: theirId
+        AttributeType: S
+  GroupsDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+  GroupLinksDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      - AttributeName: groupId
+        KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      - AttributeName: groupId
+        AttributeType: S
+  MessagesDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+      - AttributeName: groupId
+        KeyType: HASH
+      - AttributeName: id
+        KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: groupId
+        AttributeType: S
+      - AttributeName: id
+        AttributeType: S
+      - AttributeName: CreateTime
+        AttributeType: N
+      GlobalSecondaryIndexes:
+      - IndexName: MessagesGroupCreateTime
+        KeySchema:
+        - AttributeName: groupId
+          KeyType: HASH
+        - AttributeName: CreateTime
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL

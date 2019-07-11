@@ -1,0 +1,13 @@
+#if($ctx.stash.resolverName == "postMessage")
+    #set($id = $ctx.identity.sub)
+    #set($groupId = $ctx.args.groupId)
+#end
+{
+  "version": "2017-02-28",
+  "operation": "GetItem",
+  "key": {
+    "id": { "S": "${id}" },
+    "groupId": { "S": "${groupId}" }
+  },
+  "consistentRead": true
+}

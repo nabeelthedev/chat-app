@@ -1,0 +1,2 @@
+$util.toJson({"id": "${ctx.stash.createGroupId}", "name": "${ctx.stash.createGroupName}",
+"LastUpdated": "${ctx.stash.createGroupLastUpdated}"})

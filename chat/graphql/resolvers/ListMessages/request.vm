@@ -1,0 +1,20 @@
+{
+    "version" : "2018-05-29",
+    "operation" : "Query",
+    "query" : {
+        "expression" : "groupId = :groupId#if($ctx.args.after) AND CreateTime > :cta#end",
+        "expressionValues" : {
+            ":groupId" : {"S": "${ctx.args.groupId}"}
+            #if($ctx.args.after),":cta": {"N": "${ctx.args.after}"}#end
+        }
+    },
+    "index": "MessagesGroupCreateTime",
+    "limit": 10,
+    "scanIndexForward" : false,
+    "select" : "ALL_ATTRIBUTES"
+    #if($ctx.args.nextToken),"nextToken": "${ctx.args.nextToken}"#else#end
+    ## #if($ctx.args.after),"filter": {
+    ##     "expression": "CreateTime > :id",
+    ##     "expressionValues": {":id": {"N": "${ctx.args.after}"}}
+    ## }#end
+}

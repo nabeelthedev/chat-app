@@ -1,0 +1,21 @@
+#if($ctx.error)
+    $util.error($ctx.error.message, $ctx.error.type)
+#end
+
+#if($ctx.stash.resolverName == "addFriend")
+    #if(!$ctx.result)
+        $util.error("Reference link not found.", "Not Found")
+    #else
+        $util.qr($ctx.stash.put("addFriendReferenceLinkValue", $ctx.result.value))
+    #end
+#end
+
+#if($ctx.stash.resolverName == "joinGroup")
+    #if(!$ctx.result)
+        $util.error("Reference link not found.", "Not Found")
+    #else
+        $util.qr($ctx.stash.put("joinGroupId", $ctx.result.value))
+    #end
+#end
+
+$util.toJson($ctx.result)

@@ -1,0 +1,14 @@
+#if($ctx.stash.resolverName == "addFriend")
+    #set($referenceLinkId = $ctx.stash.addFriendReferenceLinkId)
+#end
+#if($ctx.stash.resolverName == "joinGroup")
+    #set($referenceLinkId = $ctx.stash.joinGroupReferenceLinkId)
+#end
+{
+  "version": "2017-02-28",
+  "operation": "GetItem",
+  "key": {
+    "id": { "S": "${referenceLinkId}" }
+  },
+  "consistentRead": true
+}
